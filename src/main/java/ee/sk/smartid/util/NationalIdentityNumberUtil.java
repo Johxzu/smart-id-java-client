@@ -49,15 +49,21 @@ public class NationalIdentityNumberUtil {
     private static final DateTimeFormatter DATE_FORMATTER_YYYY_MM_DD = DateTimeFormatter.ofPattern("uuuuMMdd")
             .withResolverStyle(ResolverStyle.STRICT);
 
+    private static final Pattern BE_PERSON_CODE_PATTERN = Pattern.compile("[0-9]{11}");
+    private static final String BE_UNKNOWN_BIRTH_MONTH_AND_DAY = "0000";
+    private static final int BE_CHECK_DIGITS_MODULUS = 97;
+
     /**
-     * Detect date-of-birth from a Baltic national identification number if possible or return null.
+     * Detect date-of-birth from a national identification number if possible or return null.
      * <p>
      * This method always returns the value for all Estonian and Lithuanian national identification numbers.
      * <p>
      * It also works for older Latvian personal codes but Latvian personal codes issued after July 1st 2017
      * (starting with "32") do not carry date-of-birth.
      * <p>
-     * For non-Baltic countries (countries other than Estonia, Latvia or Lithuania) it always returns null
+     * Belgian national register numbers carry date-of-birth unless the birth month and day are unknown (both are zeroes).
+     * <p>
+     * For other countries (countries other than Estonia, Latvia, Lithuania or Belgium) it always returns null
      * (even if it would be possible to deduce date of birth from national identity number).
      * <p>
      * Newer (but not all) Smart-ID certificates have date-of-birth on a separate attribute.
@@ -73,6 +79,7 @@ public class NationalIdentityNumberUtil {
         return switch (authenticationIdentity.getCountry().toUpperCase()) {
             case "EE", "LT" -> parseEeLtDateOfBirth(identityNumber);
             case "LV" -> parseLvDateOfBirth(identityNumber);
+            case "BE" -> parseBeDateOfBirth(identityNumber);
             default -> null;
         };
     }
@@ -132,6 +139,47 @@ public class NationalIdentityNumberUtil {
         } catch (DateTimeParseException e) {
             throw new UnprocessableSmartIdResponseException("Unable get birthdate from Latvian personal code " + lvNationalIdentityNumber, e);
         }
+    }
+
+    /**
+     * Parses date of birth from Belgian national register number if possible.
+     * <p>
+     * The number consists of 11 digits in the form YYMMDDSSSCC. As the birth year is given with two digits only,
+     * the century is deduced from the check digits: they are calculated over the first 9 digits for persons born
+     * before 2000 and over the same digits prefixed with "2" for persons born in 2000 or later.
+     * <p>
+     * If birth month and day are not known (both are zeroes) then null is returned.
+     *
+     * @param beNationalIdentityNumber Belgian national register number
+     * @return Date of birth or null if the personal code does not carry birthdate info
+     * @throws UnprocessableSmartIdResponseException if the national identity number is invalid or date cannot be parsed
+     */
+    public static LocalDate parseBeDateOfBirth(String beNationalIdentityNumber) {
+        if (beNationalIdentityNumber == null || !BE_PERSON_CODE_PATTERN.matcher(beNationalIdentityNumber).matches()) {
+            throw new UnprocessableSmartIdResponseException("Invalid personal code: " + beNationalIdentityNumber);
+        }
+
+        String birthMonthAndDay = beNationalIdentityNumber.substring(2, 6);
+        if (BE_UNKNOWN_BIRTH_MONTH_AND_DAY.equals(birthMonthAndDay)) {
+            logger.debug("Person has a Belgian national register number that does not carry birthdate info");
+            return null;
+        }
+
+        String birthDateYyyyMmDd = determineBeBirthYear(beNationalIdentityNumber) + birthMonthAndDay;
+        try {
+            return LocalDate.parse(birthDateYyyyMmDd, DATE_FORMATTER_YYYY_MM_DD);
+        } catch (DateTimeParseException e) {
+            throw new UnprocessableSmartIdResponseException("Unable get birthdate from Belgian personal code " + beNationalIdentityNumber, e);
+        }
+    }
+
+    private static String determineBeBirthYear(String beNationalIdentityNumber) {
+        long codeWithoutCheckDigits = Long.parseLong(beNationalIdentityNumber.substring(0, 9));
+        int checkDigits = Integer.parseInt(beNationalIdentityNumber.substring(9));
+        String birthYearTwoDigit = beNationalIdentityNumber.substring(0, 2);
+
+        boolean bornBefore2000 = BE_CHECK_DIGITS_MODULUS - (codeWithoutCheckDigits % BE_CHECK_DIGITS_MODULUS) == checkDigits;
+        return (bornBefore2000 ? "19" : "20") + birthYearTwoDigit;
     }
 
     private static boolean isNonParsableLVPersonCodePrefix(String prefix) {

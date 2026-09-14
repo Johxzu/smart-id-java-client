@@ -57,4 +57,11 @@ public class SemanticsIdentifierTest {
         assertThat(semanticsIdentifier.getIdentifier(), is("PNOLV-CCC-DDDDD"));
     }
 
+    @Test
+    public void constructor4() {
+        SemanticsIdentifier semanticsIdentifier = new SemanticsIdentifier(SemanticsIdentifier.IdentityType.PNO, SemanticsIdentifier.CountryCode.BE, "93051822361");
+
+        assertThat(semanticsIdentifier.getIdentifier(), is("PNOBE-93051822361"));
+    }
+
 }

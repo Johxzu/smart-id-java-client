@@ -39,7 +39,7 @@ public class SemanticsIdentifier implements Serializable {
      * Constructs a new SemanticsIdentifier with the specified identity type, country code and identity number.
      *
      * @param identityType   the identity type (e.g., PAS, IDC, PNO). See {@link IdentityType}
-     * @param countryCode    the country code (e.g., EE, LT, LV). See {@link CountryCode}
+     * @param countryCode    the country code (e.g., EE, LT, LV, BE). See {@link CountryCode}
      * @param identityNumber the identity number
      */
     public SemanticsIdentifier(IdentityType identityType, CountryCode countryCode, String identityNumber) {
@@ -50,7 +50,7 @@ public class SemanticsIdentifier implements Serializable {
      * Constructs a new SemanticsIdentifier with the specified identity type, country code string and identity number.
      *
      * @param identityType      the identity type (e.g., PAS, IDC, PNO). See {@link IdentityType}
-     * @param countryCodeString country code as string (e.g., EE, LT, LV)
+     * @param countryCodeString country code as string (e.g., EE, LT, LV, BE)
      * @param identityNumber    the identity number
      */
     public SemanticsIdentifier(IdentityType identityType, String countryCodeString, String identityNumber) {
@@ -61,7 +61,7 @@ public class SemanticsIdentifier implements Serializable {
      * Constructs a new SemanticsIdentifier with the specified identity type string, country code string and identity number.
      *
      * @param identityTypeString the identity type as string (e.g., PAS, IDC, PNO)
-     * @param countryCodeString  country code as string (e.g., EE, LT, LV)
+     * @param countryCodeString  country code as string (e.g., EE, LT, LV, BE)
      * @param identityNumber     the identity number
      */
     public SemanticsIdentifier(String identityTypeString, String countryCodeString, String identityNumber) {
@@ -125,7 +125,12 @@ public class SemanticsIdentifier implements Serializable {
         /**
          * Latvia
          */
-        LV
+        LV,
+
+        /**
+         * Belgium
+         */
+        BE
     }
 
     @Override

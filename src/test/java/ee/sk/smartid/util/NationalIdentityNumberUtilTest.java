@@ -121,6 +121,59 @@ public class NationalIdentityNumberUtilTest {
     }
 
     @Test
+    public void getDateOfBirthFromIdCode_belgianIdCode_returns() {
+        AuthenticationIdentity identity = new AuthenticationIdentity();
+        identity.setCountry("BE");
+        identity.setIdentityNumber("93051822361");
+
+        LocalDate dateOfBirth = NationalIdentityNumberUtil.getDateOfBirth(identity);
+
+        assertThat(dateOfBirth, is(notNullValue()));
+        assertThat(dateOfBirth, is(LocalDate.of(1993, 5, 18)));
+    }
+
+    @Test
+    public void parseBeDateOfBirth_20century() {
+        LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth("70081400138");
+        assertThat(birthDate, is(LocalDate.of(1970, 8, 14)));
+    }
+
+    @Test
+    public void parseBeDateOfBirth_21century() {
+        LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth("01030912366");
+        assertThat(birthDate, is(LocalDate.of(2001, 3, 9)));
+    }
+
+    @Test
+    public void parseBeDateOfBirth_sameDateIn20century_distinguishedByCheckDigits() {
+        LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth("01030912337");
+        assertThat(birthDate, is(LocalDate.of(1901, 3, 9)));
+    }
+
+    @Test
+    public void parseBeDateOfBirth_withoutDateOfBirth_returnsNull() {
+        LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth("70000012345");
+        assertThat(birthDate, is(nullValue()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "7008140013", "700814001385", "7008140013A"})
+    public void parseBeDateOfBirth_invalidPersonCode_throwsException(String beNationalIdentityNumber) {
+        var unprocessableSmartIdResponseException = assertThrows(UnprocessableSmartIdResponseException.class,
+                () -> NationalIdentityNumberUtil.parseBeDateOfBirth(beNationalIdentityNumber));
+
+        assertThat(unprocessableSmartIdResponseException.getMessage(), is("Invalid personal code: " + beNationalIdentityNumber));
+    }
+
+    @Test
+    public void parseBeDateOfBirth_invalidMonth_throwsException() {
+        var unprocessableSmartIdResponseException = assertThrows(UnprocessableSmartIdResponseException.class,
+                () -> NationalIdentityNumberUtil.parseBeDateOfBirth("70131400138"));
+
+        assertThat(unprocessableSmartIdResponseException.getMessage(), is("Unable get birthdate from Belgian personal code 70131400138"));
+    }
+
+    @Test
     public void getDateOfBirthFromIdCode_sweden_returnsNull() {
         AuthenticationIdentity identity = new AuthenticationIdentity();
         identity.setCountry("SE");
