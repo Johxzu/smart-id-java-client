@@ -4,7 +4,7 @@ package ee.sk.smartid.util;
  * #%L
  * Smart ID sample Java client
  * %%
- * Copyright (C) 2018 - 2025 SK ID Solutions AS
+ * Copyright (C) 2018 - 2026 SK ID Solutions AS
  * %%
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -36,8 +36,10 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.time.LocalDate;
 
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import ee.sk.smartid.AuthenticationIdentity;
@@ -121,59 +123,6 @@ public class NationalIdentityNumberUtilTest {
     }
 
     @Test
-    public void getDateOfBirthFromIdCode_belgianIdCode_returns() {
-        AuthenticationIdentity identity = new AuthenticationIdentity();
-        identity.setCountry("BE");
-        identity.setIdentityNumber("93051822361");
-
-        LocalDate dateOfBirth = NationalIdentityNumberUtil.getDateOfBirth(identity);
-
-        assertThat(dateOfBirth, is(notNullValue()));
-        assertThat(dateOfBirth, is(LocalDate.of(1993, 5, 18)));
-    }
-
-    @Test
-    public void parseBeDateOfBirth_20century() {
-        LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth("70081400138");
-        assertThat(birthDate, is(LocalDate.of(1970, 8, 14)));
-    }
-
-    @Test
-    public void parseBeDateOfBirth_21century() {
-        LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth("01030912366");
-        assertThat(birthDate, is(LocalDate.of(2001, 3, 9)));
-    }
-
-    @Test
-    public void parseBeDateOfBirth_sameDateIn20century_distinguishedByCheckDigits() {
-        LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth("01030912337");
-        assertThat(birthDate, is(LocalDate.of(1901, 3, 9)));
-    }
-
-    @Test
-    public void parseBeDateOfBirth_withoutDateOfBirth_returnsNull() {
-        LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth("70000012345");
-        assertThat(birthDate, is(nullValue()));
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"", "7008140013", "700814001385", "7008140013A"})
-    public void parseBeDateOfBirth_invalidPersonCode_throwsException(String beNationalIdentityNumber) {
-        var unprocessableSmartIdResponseException = assertThrows(UnprocessableSmartIdResponseException.class,
-                () -> NationalIdentityNumberUtil.parseBeDateOfBirth(beNationalIdentityNumber));
-
-        assertThat(unprocessableSmartIdResponseException.getMessage(), is("Invalid personal code: " + beNationalIdentityNumber));
-    }
-
-    @Test
-    public void parseBeDateOfBirth_invalidMonth_throwsException() {
-        var unprocessableSmartIdResponseException = assertThrows(UnprocessableSmartIdResponseException.class,
-                () -> NationalIdentityNumberUtil.parseBeDateOfBirth("70131400138"));
-
-        assertThat(unprocessableSmartIdResponseException.getMessage(), is("Unable get birthdate from Belgian personal code 70131400138"));
-    }
-
-    @Test
     public void getDateOfBirthFromIdCode_sweden_returnsNull() {
         AuthenticationIdentity identity = new AuthenticationIdentity();
         identity.setCountry("SE");
@@ -191,4 +140,85 @@ public class NationalIdentityNumberUtilTest {
         assertThat(NationalIdentityNumberUtil.getDateOfBirth(identity), is(nullValue()));
     }
 
+    @Nested
+    class BelgianNationalRegisterNumber {
+
+        @Test
+        void getDateOfBirth_returnsDateOfBirth() {
+            AuthenticationIdentity identity = new AuthenticationIdentity();
+            identity.setCountry("BE");
+            identity.setIdentityNumber("93051822361");
+
+            LocalDate dateOfBirth = NationalIdentityNumberUtil.getDateOfBirth(identity);
+
+            assertThat(dateOfBirth, is(notNullValue()));
+            assertThat(dateOfBirth, is(LocalDate.of(1993, 5, 18)));
+        }
+
+        @ParameterizedTest
+        @CsvSource({
+                "70081400138, 1970-08-14", // born in 20th century
+                "01030912366, 2001-03-09", // born in 21st century
+                "01030912337, 1901-03-09" // same day and month as above, century told apart by the check digit
+        })
+        void parseBeDateOfBirth_centuryIsDeducedFromCheckDigit(String beNationalIdentityNumber, LocalDate expectedDateOfBirth) {
+            LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth(beNationalIdentityNumber);
+
+            assertThat(birthDate, is(expectedDateOfBirth));
+        }
+
+        @ParameterizedTest
+        @CsvSource({
+                "70281400181, 1970-08-14", // gender known, birth month increased by 20
+                "01430900180, 2001-03-09", // gender unknown, birth month increased by 40
+                "01520500169, 2001-12-05"  // gender unknown, birth month increased by 40
+        })
+        void parseBeDateOfBirth_bisNumber_monthOffsetIsRemoved(String beNationalIdentityNumber, LocalDate expectedDateOfBirth) {
+            LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth(beNationalIdentityNumber);
+
+            assertThat(birthDate, is(expectedDateOfBirth));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "70000000114", // national register number, birth month and day are zeroes
+                "70200000157", // bisnummer with known gender, birth month and day are zeroes
+                "70400000103" // bisnummer with unknown gender, birth month and day are zeroes
+        })
+        void parseBeDateOfBirth_withoutDateOfBirth_returnsNull(String beNationalIdentityNumber) {
+            LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth(beNationalIdentityNumber);
+
+            assertThat(birthDate, is(nullValue()));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"", "7008140013", "700814001385", "7008140013A"})
+        void parseBeDateOfBirth_notElevenDigits_throwsException(String beNationalIdentityNumber) {
+            var exception = assertThrows(UnprocessableSmartIdResponseException.class,
+                    () -> NationalIdentityNumberUtil.parseBeDateOfBirth(beNationalIdentityNumber));
+
+            assertThat(exception.getMessage(), is("Invalid personal code: " + beNationalIdentityNumber));
+        }
+
+        @Test
+        void parseBeDateOfBirth_checkDigitMatchesNeitherCentury_throwsException() {
+            var exception = assertThrows(UnprocessableSmartIdResponseException.class,
+                    () -> NationalIdentityNumberUtil.parseBeDateOfBirth("70081400139"));
+
+            assertThat(exception.getMessage(), is("Invalid personal code: 70081400139"));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "70131400173", // month 13
+                "70331400119", // bisnummer with known gender, month 33 is 13 without the offset
+                "70201400125" // bisnummer month offset without a month, but with a birth day
+        })
+        void parseBeDateOfBirth_invalidMonth_throwsException(String beNationalIdentityNumber) {
+            var exception = assertThrows(UnprocessableSmartIdResponseException.class,
+                    () -> NationalIdentityNumberUtil.parseBeDateOfBirth(beNationalIdentityNumber));
+
+            assertThat(exception.getMessage(), is("Unable to get birthdate from Belgian personal code " + beNationalIdentityNumber));
+        }
+    }
 }

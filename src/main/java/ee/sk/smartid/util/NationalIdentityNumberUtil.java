@@ -4,7 +4,7 @@ package ee.sk.smartid.util;
  * #%L
  * Smart ID sample Java client
  * %%
- * Copyright (C) 2018 - 2025 SK ID Solutions AS
+ * Copyright (C) 2018 - 2026 SK ID Solutions AS
  * %%
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -50,8 +50,12 @@ public class NationalIdentityNumberUtil {
             .withResolverStyle(ResolverStyle.STRICT);
 
     private static final Pattern BE_PERSON_CODE_PATTERN = Pattern.compile("[0-9]{11}");
-    private static final String BE_UNKNOWN_BIRTH_MONTH_AND_DAY = "0000";
-    private static final int BE_CHECK_DIGITS_MODULUS = 97;
+    private static final String BE_UNKNOWN_BIRTH_DAY = "00";
+    private static final int BE_UNKNOWN_BIRTH_MONTH = 0;
+    private static final int BE_CHECK_DIGIT_MODULUS = 97;
+    private static final long BE_BORN_IN_21ST_CENTURY_PREFIX = 2_000_000_000L;
+    private static final int BE_BIS_NUMBER_MONTH_OFFSET_KNOWN_GENDER = 20;
+    private static final int BE_BIS_NUMBER_MONTH_OFFSET_UNKNOWN_GENDER = 40;
 
     /**
      * Detect date-of-birth from a national identification number if possible or return null.
@@ -144,9 +148,13 @@ public class NationalIdentityNumberUtil {
     /**
      * Parses date of birth from Belgian national register number if possible.
      * <p>
-     * The number consists of 11 digits in the form YYMMDDSSSCC. As the birth year is given with two digits only,
-     * the century is deduced from the check digits: they are calculated over the first 9 digits for persons born
-     * before 2000 and over the same digits prefixed with "2" for persons born in 2000 or later.
+     * The number consists of 11 digits in the form YYMMDDXXXCD, where YYMMDD is the date of birth, XXX the daily
+     * serial number and CD the check digit. As the birth year is given with two digits only, the century is deduced
+     * from the check digit, see {@link #determineBeBirthCentury(String)}.
+     * <p>
+     * A bisnummer, issued to persons not registered in the National Registry, carries the birth month increased
+     * by 20 if the person's gender is known and by 40 if it is not. The offset is removed before the date is parsed,
+     * but the check digit is always calculated over the number as issued.
      * <p>
      * If birth month and day are not known (both are zeroes) then null is returned.
      *
@@ -159,27 +167,71 @@ public class NationalIdentityNumberUtil {
             throw new UnprocessableSmartIdResponseException("Invalid personal code: " + beNationalIdentityNumber);
         }
 
-        String birthMonthAndDay = beNationalIdentityNumber.substring(2, 6);
-        if (BE_UNKNOWN_BIRTH_MONTH_AND_DAY.equals(birthMonthAndDay)) {
+        String birthCentury = determineBeBirthCentury(beNationalIdentityNumber);
+
+        String birthYearTwoDigit = beNationalIdentityNumber.substring(0, 2);
+        int birthMonth = removeBeBisNumberMonthOffset(Integer.parseInt(beNationalIdentityNumber.substring(2, 4)));
+        String birthDay = beNationalIdentityNumber.substring(4, 6);
+
+        if (birthMonth == BE_UNKNOWN_BIRTH_MONTH && BE_UNKNOWN_BIRTH_DAY.equals(birthDay)) {
             logger.debug("Person has a Belgian national register number that does not carry birthdate info");
             return null;
         }
 
-        String birthDateYyyyMmDd = determineBeBirthYear(beNationalIdentityNumber) + birthMonthAndDay;
+        String birthDateYyyyMmDd = birthCentury + birthYearTwoDigit + "%02d".formatted(birthMonth) + birthDay;
         try {
             return LocalDate.parse(birthDateYyyyMmDd, DATE_FORMATTER_YYYY_MM_DD);
         } catch (DateTimeParseException e) {
-            throw new UnprocessableSmartIdResponseException("Unable get birthdate from Belgian personal code " + beNationalIdentityNumber, e);
+            throw new UnprocessableSmartIdResponseException("Unable to get birthdate from Belgian personal code " + beNationalIdentityNumber, e);
         }
     }
 
-    private static String determineBeBirthYear(String beNationalIdentityNumber) {
-        long codeWithoutCheckDigits = Long.parseLong(beNationalIdentityNumber.substring(0, 9));
-        int checkDigits = Integer.parseInt(beNationalIdentityNumber.substring(9));
-        String birthYearTwoDigit = beNationalIdentityNumber.substring(0, 2);
+    /**
+     * Removes the bisnummer offset from the birth month given in a Belgian national register number.
+     * <p>
+     * The month of a bisnummer is increased by 20 if the person's gender is known and by 40 if it is not.
+     * The month of a regular national register number is returned as is.
+     *
+     * @param birthMonthFromPersonalCode birth month as given in the national register number
+     * @return birth month without the bisnummer offset
+     */
+    private static int removeBeBisNumberMonthOffset(int birthMonthFromPersonalCode) {
+        if (birthMonthFromPersonalCode >= BE_BIS_NUMBER_MONTH_OFFSET_UNKNOWN_GENDER) {
+            return birthMonthFromPersonalCode - BE_BIS_NUMBER_MONTH_OFFSET_UNKNOWN_GENDER;
+        }
+        if (birthMonthFromPersonalCode >= BE_BIS_NUMBER_MONTH_OFFSET_KNOWN_GENDER) {
+            return birthMonthFromPersonalCode - BE_BIS_NUMBER_MONTH_OFFSET_KNOWN_GENDER;
+        }
+        return birthMonthFromPersonalCode;
+    }
 
-        boolean bornBefore2000 = BE_CHECK_DIGITS_MODULUS - (codeWithoutCheckDigits % BE_CHECK_DIGITS_MODULUS) == checkDigits;
-        return (bornBefore2000 ? "19" : "20") + birthYearTwoDigit;
+    /**
+     * Determines the century of birth from the check digit of a Belgian national register number.
+     * <p>
+     * The check digit is calculated over the first 9 digits (YYMMDDXXX) of the number. If it matches the check digit
+     * in the number then the person was born in the 20th century. If it does not, the calculation is repeated over
+     * the same 9 digits prefixed with "2"; a match then means the person was born in the 21st century. If neither
+     * calculation matches, the number is not a valid Belgian national register number.
+     *
+     * @param beNationalIdentityNumber Belgian national register number
+     * @return "19" or "20"
+     * @throws UnprocessableSmartIdResponseException if the check digit matches neither century
+     */
+    private static String determineBeBirthCentury(String beNationalIdentityNumber) {
+        long codeWithoutCheckDigit = Long.parseLong(beNationalIdentityNumber.substring(0, 9));
+        int checkDigit = Integer.parseInt(beNationalIdentityNumber.substring(9));
+
+        if (checkDigit == calculateBeCheckDigit(codeWithoutCheckDigit)) {
+            return "19";
+        }
+        if (checkDigit == calculateBeCheckDigit(BE_BORN_IN_21ST_CENTURY_PREFIX + codeWithoutCheckDigit)) {
+            return "20";
+        }
+        throw new UnprocessableSmartIdResponseException("Invalid personal code: " + beNationalIdentityNumber);
+    }
+
+    private static int calculateBeCheckDigit(long codeWithoutCheckDigit) {
+        return (int) (BE_CHECK_DIGIT_MODULUS - codeWithoutCheckDigit % BE_CHECK_DIGIT_MODULUS);
     }
 
     private static boolean isNonParsableLVPersonCodePrefix(String prefix) {
