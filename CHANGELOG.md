@@ -3,10 +3,9 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [3.2] - TBD
+## [3.3] - TBD
 
 ### Changes
-
 - Added Belgium (`BE`) support:
   - Added `BE` to `SemanticsIdentifier.CountryCode`.
   - Added `NationalIdentityNumberUtil.parseBeDateOfBirth()` which extracts the date of birth from a Belgian national
@@ -14,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     are rejected as invalid. Bisnummer, which carries the birth month increased by 20 or 40, is supported. Numbers
     where the birth month and day are unknown (both zeroes) do not carry the date of birth and `null` is returned.
   - `NationalIdentityNumberUtil.getDateOfBirth()` now also handles identities with country `BE`.
+  
+## [3.2] - 2026-03-18
+
+### Changes
 - Added legacy signing algorithms (`SHA256_WITH_RSA_ENCRYPTION`, `SHA384_WITH_RSA_ENCRYPTION`, `SHA512_WITH_RSA_ENCRYPTION`) for RSASSA-PKCS#1 v1.5.
   - Compatible with DigiDoc4j library which does not support RSASSA-PSS.
   - Use `SigningSignatureAlgorithm` enum and `withSignatureAlgorithm()` on signature session builders.

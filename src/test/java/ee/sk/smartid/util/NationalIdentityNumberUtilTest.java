@@ -191,6 +191,14 @@ public class NationalIdentityNumberUtilTest {
             assertThat(birthDate, is(nullValue()));
         }
 
+        @Test
+        void parseBeDateOfBirth_nullInput_throwsException() {
+            var exception = assertThrows(UnprocessableSmartIdResponseException.class,
+                    () -> NationalIdentityNumberUtil.parseBeDateOfBirth(null));
+
+            assertThat(exception.getMessage(), is("Invalid personal code: " + null));
+        }
+
         @ParameterizedTest
         @ValueSource(strings = {"", "7008140013", "700814001385", "7008140013A"})
         void parseBeDateOfBirth_notElevenDigits_throwsException(String beNationalIdentityNumber) {
