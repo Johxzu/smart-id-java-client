@@ -192,6 +192,21 @@ public class NationalIdentityNumberUtilTest {
         }
 
         @Test
+        void parseBeDateOfBirth_leapDayIn2000_returnsDate() {
+            LocalDate birthDate = NationalIdentityNumberUtil.parseBeDateOfBirth("00022900145");
+
+            assertThat(birthDate, is(LocalDate.of(2000, 2, 29)));
+        }
+
+        @Test
+        void parseBeDateOfBirth_leapDayIn1900_throwsException() {
+            var exception = assertThrows(UnprocessableSmartIdResponseException.class,
+                    () -> NationalIdentityNumberUtil.parseBeDateOfBirth("00022900116"));
+
+            assertThat(exception.getMessage(), is("Unable to get birthdate from Belgian personal code 00022900116"));
+        }
+
+        @Test
         void parseBeDateOfBirth_nullInput_throwsException() {
             var exception = assertThrows(UnprocessableSmartIdResponseException.class,
                     () -> NationalIdentityNumberUtil.parseBeDateOfBirth(null));
